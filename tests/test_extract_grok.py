@@ -53,6 +53,9 @@ def test_coerce_types():
     assert common.coerce("niy_pct", "null") is None
     assert common.coerce("lease_start", "29/09/2026") == "29/09/2026"
     assert common.coerce("passing_rent", "n/a") is None
+    assert common.coerce("area_sqft", "261.8 (2,818)") == 2818
+    assert common.coerce("area_sqft", "145.19 (1,562)") == 1562
+    assert common.coerce("total_area_sqft", "1,054.8 sq m (11,354 sq ft)") == 11354
 
 
 def test_parse_facts():

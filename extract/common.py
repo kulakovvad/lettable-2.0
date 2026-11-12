@@ -41,6 +41,8 @@ def write_cache(extractor: str, doc_id: str, data: dict) -> None:
 
 
 _NUM_RE = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+_BRACKET_RE = re.compile(r"\(\s*([\d,]+(?:\.\d+)?)[^)]*\)")
+AREA_FIELDS = frozenset({"area_sqft", "total_area_sqft"})
 
 
 def coerce(field: str, raw: Any) -> Value:
@@ -66,7 +68,11 @@ def coerce(field: str, raw: Any) -> Value:
         return None
     if isinstance(raw, (int, float)):
         return int(round(raw)) if typ is int else float(raw)
-    m = _NUM_RE.search(str(raw))
+    text = str(raw)
+    # Acuitus prints "sq m (sq ft)": the bracketed figure is the sq ft value, never the first number.
+    if field in AREA_FIELDS and (b := _BRACKET_RE.search(text)):
+        text = b.group(1)
+    m = _NUM_RE.search(text)
     if not m:
         return None
     num = float(m.group(0).replace(",", ""))

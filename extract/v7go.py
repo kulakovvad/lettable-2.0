@@ -169,7 +169,7 @@ def _pick(field: str, text: str) -> tuple[str, str]:
                     if date(yy, mm, dd) >= vd:
                         chosen = d
                         break
-            return chosen, chosen
+            return chosen, text
     return text, text
 
 

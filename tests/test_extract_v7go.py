@@ -91,6 +91,7 @@ def test_parse_flat_with_citations(monkeypatch):
     assert by[("Unit 1", "area_sqft")].value == 4142
     assert by[("Unit 1", "area_sqft")].quote == "(2,818) (1,324)"
     assert by[("Unit 1", "break_date")].value == "24/08/2028"
+    assert by[("Unit 1", "break_date")].quote == "24/08/2028, 24/08/2030"
     assert by[("Unit 1", "rent_review_date")].value == "29/09/2031"
     assert by[("Unit 1", "rent_review_date")].page is None
     assert by[(None, "total_rent")].page == 2 and by[(None, "total_rent")].value == 110800
