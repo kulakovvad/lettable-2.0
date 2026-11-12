@@ -73,6 +73,14 @@ def match_units(ids_a: list[str | None], ids_b: list[str | None]) -> dict[str | 
     return out
 
 
+_SUFFIXES = {"ltd": "limited", "co": "company", "&": "and"}
+
+
+def _entity(s: str) -> str:
+    tokens = re.sub(r"[^a-z0-9& ]", " ", normalize_text(s)).split()
+    return " ".join(_SUFFIXES.get(t, t) for t in tokens)
+
+
 def _num(v: Value) -> float | None:
     if isinstance(v, bool):
         return None
@@ -102,4 +110,6 @@ def values_equal(field: str, a: Value, b: Value) -> bool:
         if kind is int:
             return round(na) == round(nb)
         return abs(na - nb) < 0.01
-    return fuzz.token_set_ratio(normalize_text(str(a)), normalize_text(str(b))) >= STRING_EQUAL_THRESHOLD
+    # token_sort, not token_set: a subset must not count as equal ("Howden Joinery Limited" vs
+    # "Howden Joinery Properties Limited" are different companies).
+    return fuzz.token_sort_ratio(_entity(str(a)), _entity(str(b))) >= STRING_EQUAL_THRESHOLD

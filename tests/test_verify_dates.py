@@ -5,6 +5,7 @@ from verify.dates import (
     check_unit,
     expected_expiry,
     find_dates,
+    is_future_step_rent,
     normalize_date_facts,
     parse_term,
     parse_uk_date,
@@ -46,6 +47,17 @@ def test_find_dates_in_quote() -> None:
     assert find_dates(q) == [date(2027, 6, 1)]
     assert find_dates("29/09/2026,\n29/09/2031") == [date(2026, 9, 29), date(2031, 9, 29)]
     assert find_dates("from 1st April 2027 until 31st March 2037") == [date(2027, 4, 1), date(2037, 3, 31)]
+    assert find_dates("01/06/2022-31/05/2032") == [date(2022, 6, 1), date(2032, 5, 31)]
+    assert find_dates("1/2/3/2024") == []
+
+
+def test_future_step_rent() -> None:
+    q = "£20,000 rising to £25,500 in April 2027"
+    assert is_future_step_rent(_f("passing_rent", 25500, q), VALUATION)
+    assert not is_future_step_rent(_f("passing_rent", 20000, q), VALUATION)
+    assert not is_future_step_rent(_f("passing_rent", 25500, q), date(2027, 5, 1))
+    assert check_unit([_f("passing_rent", 25500, q)], VALUATION)["passing_rent"] == "inconsistent"
+    assert check_unit([_f("passing_rent", 20000, q)], VALUATION)["passing_rent"] == "not_applicable"
 
 
 def test_parse_term_variants() -> None:

@@ -47,7 +47,10 @@ def test_values_equal() -> None:
     assert values_equal("break_date", "2027-06-01", "01/06/2027")
     assert not values_equal("break_date", "2027-06-01", "2027-01-06")
     assert values_equal("tenant", "Howden Joinery Limited", "HOWDEN JOINERY LIMITED")
+    assert values_equal("tenant", "Howden Joinery Ltd", "HOWDEN JOINERY LIMITED")
     assert not values_equal("tenant", "Howden Joinery Limited", "Burkert UK Limited")
+    assert not values_equal("tenant", "Howden Joinery Limited", "Howden Joinery Properties Limited")
+    assert not values_equal("tenant", "Limited", "Burkert UK Limited")
     assert values_equal("tenant_crn", "00526923", "00526923")
     assert not values_equal("tenant_crn", "00526923", "526923")
     assert values_equal("lease_term_years", 10, 10.0)
@@ -57,9 +60,27 @@ def test_values_equal() -> None:
 
 def test_disagreement_routes_to_review() -> None:
     out = _verified()
-    for ex in ("v7go", "grok"):
-        f = out[(ex, "Unit 3", "passing_rent")]
-        assert (f.review_status, f.review_reason) == ("review", "extractors_disagree")
+    grok, v7 = out[("grok", "Unit 3", "passing_rent")], out[("v7go", "Unit 3", "passing_rent")]
+    assert (grok.review_status, grok.review_reason) == ("review", "extractors_disagree")
+    # V7 took the April 2027 step, which starts after the valuation date.
+    assert (v7.review_status, v7.review_reason) == ("review", "date_inconsistent")
+
+
+def test_future_step_rent_caught_even_when_extractors_agree() -> None:
+    a = ground(Fact(doc_id="d", unit_id="Unit 3", field="passing_rent", value=25500, page=3,
+                    quote="£20,000 rising to £25,500 in April 2027", extractor="v7go", author="t"), PAGES)
+    out = route([a], [a.model_copy(update={"extractor": "grok"})])
+    assert {(f.review_status, f.review_reason) for f in out} == {("review", "date_inconsistent")}
+
+
+def test_every_duplicate_fact_is_checked() -> None:
+    good = ground(Fact(doc_id="d", unit_id="Unit 4", field="break_date", value="2028-08-24", page=3,
+                       quote="24/08/2028", extractor="v7go", author="t"), PAGES)
+    invented = Fact(doc_id="d", unit_id="Unit 4", field="break_date", value="2030-08-24", page=3,
+                    quote="made up 24/08/2031", grounded=False, confidence=0.1, extractor="v7go", author="t")
+    out = route([good, invented], [good.model_copy(update={"extractor": "grok"})])
+    assert all(f.review_status == "review" for f in out)
+    assert next(f for f in out if f.value == "2030-08-24").review_reason == "ungrounded"
 
 
 def test_missed_footnote_break_is_missing_in_one() -> None:

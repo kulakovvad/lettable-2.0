@@ -21,7 +21,7 @@ AREA_FIELDS = frozenset({"area_sqft", "total_area_sqft"})
 _QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"', "\u2013": "-",
                          "\u2014": "-", "\u00a0": " ", "\u00ad": ""})
 _HYPHEN_BREAK = re.compile(r"(\w)-\s*\n\s*(\w)")
-_THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}\b)")
+_THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
 _WS = re.compile(r"\s+")
 _NUM_TOKEN = re.compile(r"\d+(?:[./]\d+)*")
 _NUMBER = re.compile(r"\d+(?:\.\d+)?")
@@ -38,11 +38,16 @@ def normalize_text(s: str | None) -> str:
     return _WS.sub(" ", s).strip().lower()
 
 
+def _contains(haystack: str, needle: str) -> bool:
+    """Substring match that does not cut through a word or number ('4500' is not in '44500')."""
+    return re.search(r"(?<![a-z0-9])" + re.escape(needle) + r"(?![a-z0-9])", haystack) is not None
+
+
 def _locate(q: str, p: str) -> tuple[float, bool]:
     """(score, matched) for normalized quote q in normalized page p."""
     if not q or not p:
         return 0.0, False
-    if q in p:
+    if _contains(p, q):
         return 100.0, True
     aln = fuzz.partial_ratio_alignment(q, p)
     if aln is None:
@@ -52,7 +57,7 @@ def _locate(q: str, p: str) -> tuple[float, bool]:
         return score, False
     # A near-verbatim sentence with a different date or amount is the typical invented quote.
     window = p[max(0, aln.dest_start - 5): aln.dest_end + 5]
-    return score, all(tok in window for tok in _NUM_TOKEN.findall(q))
+    return score, all(_contains(window, tok) for tok in _NUM_TOKEN.findall(q))
 
 
 def quote_score(quote: str | None, page_text: str | None) -> float:
@@ -114,23 +119,27 @@ def ground(fact: Fact, page_texts: list[str] | str, pdf_path: str | Path | None 
     """Copy of the fact with `grounded`, the page where the quote was found, bbox and confidence.
 
     Searches the stated page first, then every other page. `page_texts[i]` is page i + 1; a single
-    string is treated as the text of the stated page.
+    string is treated as the text of the stated page and leaves `page` unchanged.
     """
-    texts = [page_texts] if isinstance(page_texts, str) else list(page_texts)
-    single = isinstance(page_texts, str)
     q = normalize_text(fact.quote)
     update: dict[str, object] = {"grounded": False}
     best = 0.0
-    if q:
-        order = [fact.page or 1] if single else _page_order(fact.page, len(texts))
-        for page in order:
-            text = texts[0] if single else texts[page - 1]
-            score, ok = _locate(q, normalize_text(text))
+    if q and isinstance(page_texts, str):
+        best, ok = _locate(q, normalize_text(page_texts))
+        if ok:
+            update["grounded"] = True
+            if pdf_path and fact.page:
+                update["bbox"] = _safe_bbox(pdf_path, fact.page, fact.quote or "") or fact.bbox
+    elif q:
+        texts = list(page_texts)
+        for page in _page_order(fact.page, len(texts)):
+            score, ok = _locate(q, normalize_text(texts[page - 1]))
             best = max(best, score)
             if ok:
                 update.update(grounded=True, page=page)
-                if pdf_path:
-                    update["bbox"] = _safe_bbox(pdf_path, page, fact.quote or "") or fact.bbox
+                kept = fact.bbox if page == fact.page else None
+                found = _safe_bbox(pdf_path, page, fact.quote or "") if pdf_path else None
+                update["bbox"] = found or kept
                 break
     if fact.confidence is None:
         update["confidence"] = round(best / 100, 4)

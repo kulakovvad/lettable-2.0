@@ -19,7 +19,7 @@ _MONTH_RE = r"(?P<month>" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r
 
 _ISO_RE = re.compile(r"\b(?P<y>\d{4})-(?P<m>\d{2})-(?P<d>\d{2})\b")
 # Day first, always: 05/06/2022 is 5 June 2022.
-_NUMERIC_RE = re.compile(r"(?<![\d/.\-])(?P<d>\d{1,2})[/.\-](?P<m>\d{1,2})[/.\-](?P<y>\d{4}|\d{2})(?![\d/.\-]*\d)")
+_NUMERIC_RE = re.compile(r"(?<![\d/.])(?P<d>\d{1,2})[/.\-](?P<m>\d{1,2})[/.\-](?P<y>\d{4}|\d{2})(?!\d|[/.]\d)")
 _TEXT_RE = re.compile(
     r"\b(?:the\s+)?(?P<d>\d{1,2})(?:st|nd|rd|th)?(?:\s+day)?(?:\s+of)?\s+" + _MONTH_RE + r",?\s+(?P<y>\d{4})\b",
     re.IGNORECASE,
@@ -35,6 +35,8 @@ _TERM_RE = re.compile(
 _MONTHS_TERM_RE = re.compile(
     r"(?P<months>\d+)\s*months?\s+from(?:\s+and\s+including)?\s+(?P<rest>.+)", re.IGNORECASE | re.DOTALL
 )
+
+_STEP_RE = re.compile(r"rising\s+to\s+£?\s*(?P<amount>\d[\d,]*)(?P<tail>.{0,40})", re.IGNORECASE | re.DOTALL)
 
 APPROX_TOLERANCE_DAYS = 366
 
@@ -163,12 +165,25 @@ def _is_approx(facts: dict[str, Fact]) -> bool:
     return False
 
 
+def is_future_step_rent(fact: Fact, valuation: date | None = None) -> bool:
+    """passing_rent equals a 'rising to £X in <date>' step that starts after the valuation date."""
+    if fact.field != "passing_rent" or not fact.quote:
+        return False
+    value = _to_float(fact.value)
+    valuation = valuation or valuation_date()
+    for m in _STEP_RE.finditer(fact.quote):
+        step_date = parse_uk_date(m["tail"])
+        if value == float(m["amount"].replace(",", "")) and step_date and step_date > valuation:
+            return True
+    return False
+
+
 def check_unit(unit_facts: list[Fact], valuation: date | None = None) -> dict[str, DateCheck]:
     """Date consistency per field for one unit of one extractor.
 
     expiry vs start + term (±1 day, ±1 year when the term is 'Approx.'), start < break < expiry,
-    start <= rent review <= expiry. Non-date fields are 'not_applicable'. `valuation` is accepted for
-    signature symmetry with timeline_flags; passed breaks are not inconsistent.
+    start <= rent review <= expiry, passing rent not a step that starts after `valuation`.
+    Other fields are 'not_applicable'. Passed breaks are not inconsistent.
     """
     by_field = _first_by_field(unit_facts)
     result: dict[str, DateCheck] = {}
@@ -200,6 +215,8 @@ def check_unit(unit_facts: list[Fact], valuation: date | None = None) -> dict[st
         result["break_date"] = "inconsistent"
     if review and ((start and review < start) or (expiry and review > expiry)):
         result["rent_review_date"] = "inconsistent"
+    if "passing_rent" in by_field and is_future_step_rent(by_field["passing_rent"], valuation):
+        result["passing_rent"] = "inconsistent"
     return result
 
 

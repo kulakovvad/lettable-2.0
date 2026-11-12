@@ -76,28 +76,32 @@ def route_many(groups: list[list[Fact]]) -> list[Fact]:
 
     out: list[Fact] = []
     for (_, _, field), sides in keyed.items():
-        reasons: set[ReviewReason] = set()
-        heads: list[Fact] = []
-        for side in sides:
-            if not side:
-                reasons.add("missing_in_one")
-                continue
-            side.sort(key=lambda f: f.confidence or 0.0, reverse=True)
-            heads.append(side[0])
-            reasons |= _fact_problems(side[0])
-        if any(not values_equal(field, heads[0].value, h.value) for h in heads[1:]):
-            reasons.add("extractors_disagree")
-        reason = next((r for r in REASON_PRIORITY if r in reasons), None)
-        update = {"review_status": "review" if reason else "auto", "review_reason": reason}
-        out.extend(f.model_copy(update=update) for side in sides for f in side)
+        facts = [f for side in sides for f in side]
+        shared: set[ReviewReason] = set()
+        if any(not side for side in sides):
+            shared.add("missing_in_one")
+        if any(not values_equal(field, facts[0].value, f.value) for f in facts[1:]):
+            shared.add("extractors_disagree")
+        own = {id(f): _fact_problems(f) for f in facts}
+        pair_reason = _first(shared.union(*own.values()))
+        for f in facts:
+            reason = (_first(own[id(f)] | shared) or pair_reason) if pair_reason else None
+            out.append(f.model_copy(update={"review_status": "review" if reason else "auto",
+                                            "review_reason": reason}))
     return out
+
+
+def _first(reasons: set[ReviewReason]) -> ReviewReason | None:
+    return next((r for r in REASON_PRIORITY if r in reasons), None)
 
 
 def route(facts_a: list[Fact], facts_b: list[Fact]) -> list[Fact]:
     """Pair facts by (doc_id, unit, field) and set review_status / review_reason on copies of both sides.
 
-    auto only if both sides are grounded, agree, pass the date check and show the value in the quote;
-    otherwise review with the first reason by priority:
-    ungrounded > date_inconsistent > number_not_in_quote > missing_in_one > extractors_disagree.
+    auto only if every fact on both sides is grounded, agrees, passes the date check and shows the
+    value in its quote; otherwise every fact of the pair goes to review. Each fact gets the first
+    reason by priority among its own problems and the pair's (missing, disagree), falling back to the
+    pair's top reason: ungrounded > date_inconsistent > number_not_in_quote > missing_in_one >
+    extractors_disagree.
     """
     return route_many([facts_a, facts_b])

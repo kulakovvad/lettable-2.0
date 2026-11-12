@@ -50,6 +50,26 @@ def test_near_miss_short_quote_is_ungrounded() -> None:
     assert ground(_f("passing_rent", 22500, "£22,500"), PAGES).grounded is False
 
 
+def test_quote_inside_a_longer_number_is_ungrounded() -> None:
+    assert ground(_f("passing_rent", 4500, "£4,500"), PAGES).grounded is False
+    assert ground(_f("passing_rent", 2300, "2,300"), PAGES).grounded is False
+
+
+def test_thousands_comma_before_letters() -> None:
+    assert normalize_text("£25,500per annum") == "25500per annum"
+    assert number_in_quote(_f("passing_rent", 25500, "rent reserved of £25,500per annum"))
+
+
+def test_single_page_string_keeps_page() -> None:
+    assert ground(_f("passing_rent", 44500, "£44,500", page=None), PAGES[2]).page is None
+
+
+def test_bbox_dropped_when_quote_moves_page() -> None:
+    f = _f("total_rent", 110800, "£110,800 per Annum Exclusive", page=3).model_copy(update={"bbox": [1.0, 2, 3, 4]})
+    g = ground(f, PAGES)
+    assert g.page == 2 and g.bbox is None
+
+
 def test_ground_finds_quote_on_other_page() -> None:
     g = ground(_f("total_rent", 110800, "£110,800 per Annum Exclusive", page=3), PAGES)
     assert g.grounded and g.page == 2
