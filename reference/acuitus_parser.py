@@ -27,7 +27,7 @@ _TERM_RE = re.compile(
     re.IGNORECASE,
 )
 _UNTIL_RE = re.compile(rf"until\s+({_ANY_DATE})", re.IGNORECASE)
-_CRN_RE = re.compile(r"\(?\s*crn\s*:?\s*([0-9A-Z]{8})\s*\)?", re.IGNORECASE)
+_CRN_RE = re.compile(r"\bcrn\s*:?\s*((?:[A-Z]{2})?\d{5,8})\b", re.IGNORECASE)
 _PAREN_NUM_RE = re.compile(r"\(\s*([\d,]+)\s*\)")
 _BARE_NUM_RE = re.compile(r"\b\d{1,3}(?:,\d{3})+\b|\b\d+\b")
 _STEP_RE = re.compile(
@@ -100,6 +100,13 @@ def money(text: str) -> int:
 
 def norm_ws(text: str) -> str:
     return " ".join(text.split())
+
+
+def crn_value(raw: str) -> str:
+    """Companies House numbers are 8 characters; brochures sometimes drop the leading zero."""
+    raw = raw.upper()
+    prefix = re.match(r"[A-Z]*", raw).group(0)
+    return prefix + raw[len(prefix):].zfill(8 - len(prefix))
 
 
 def tenant_name(raw: str) -> str:
@@ -323,7 +330,8 @@ def _unit_labels(doc_id: str, row: Row, page: int, vdate: date,
                               _MARKER_RE.sub("", q).strip(" ,(\n")))
         crn = _CRN_RE.search(tenant_raw)
         if crn and not vacant:
-            out.append(_label(doc_id, uid, "tenant_crn", crn.group(1).upper(), page, crn.group(1)))
+            out.append(_label(doc_id, uid, "tenant_crn", crn_value(crn.group(1)), page,
+                              crn.group(1)))
 
     area, quote = _areas(c.get("sqft", ""))
     if area is not None:
@@ -356,9 +364,10 @@ def _unit_labels(doc_id: str, row: Row, page: int, vdate: date,
         expiry_quote = until.group(1)
     review_dates_text = re.sub(rf"\(\s*{_DATE}\s*\)", " ", review_text)
     review_matches = list(re.finditer(_DATE, review_dates_text))
-    if expiry is None and review_matches and reversion_only:
-        expiry = parse_date(review_matches[-1].group(0))
-        expiry_quote = review_matches[-1].group(0)
+    if reversion_only:
+        if expiry is None and review_matches:
+            expiry = parse_date(review_matches[-1].group(0))
+            expiry_quote = review_matches[-1].group(0)
         review_matches = []
     if expiry:
         out.append(_label(doc_id, uid, "lease_expiry", expiry.isoformat(), page, expiry_quote))

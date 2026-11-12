@@ -42,6 +42,22 @@ def test_tenant_name(raw, expected):
     assert ap.tenant_name(raw) == expected
 
 
+def test_crn_takes_first_number_and_pads_to_eight():
+    raw = "MANSFIELD VETS4PETS LIMITED (CRN 4631595) t/a VETS 4 PETS guaranteed by X (CRN 04263054)"
+    m = ap._CRN_RE.search(raw)
+    assert m.group(1) == "4631595" and ap.crn_value(m.group(1)) == "04631595"
+    assert ap.crn_value("SC123456") == "SC123456"
+    assert ap.crn_value("00526923") == "00526923"
+
+
+def test_reversion_only_column_is_not_a_review():
+    row = ap.Row("Whole", {"term": "200 years from 25/09/1959 until 24/09/2159",
+                           "review": "24/09/2159", "rent": "£100", "tenant": "X LIMITED"})
+    got = {lb.field: lb.value for lb in ap._unit_labels(D, row, 3, date(2026, 11, 12), True)}
+    assert got["lease_expiry"] == "2159-09-24"
+    assert "rent_review_date" not in got
+
+
 def test_stepped_rent_uses_amount_at_valuation_date():
     text = "£20,000 rising to £25,500 in April 2027"
     assert ap._rent(text, date(2026, 11, 12)) == (20000, text)
