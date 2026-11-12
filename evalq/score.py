@@ -31,8 +31,10 @@ def score(
 ) -> list[EvalRow]:
     """Facts of one extractor vs labels. Documents without labels are skipped."""
     run_id = eval_run_id or new_id()
-    if extractor is not None:
-        facts = [f for f in facts if f.extractor == extractor]
+    if extractor is None:
+        return [r for ext in sorted({f.extractor for f in facts})
+                for r in score(facts, labels, ext, run_id)]
+    facts = [f for f in facts if f.extractor == extractor]
     facts = _heads(facts)
     labels_by_doc: dict[str, list[Label]] = defaultdict(list)
     for lb in labels:

@@ -49,6 +49,7 @@ def test_machine_fact_without_quote_is_not_eligible() -> None:
     f = by_id(all_routed(), "v7go-unit1-passing_rent")
     assert is_eligible(f)
     assert not is_eligible(f.model_copy(update={"quote": None}))
+    assert not is_eligible(f.model_copy(update={"quote": "  \n"}))
     assert not is_eligible(f.model_copy(update={"page": None}))
     assert not is_eligible(f.model_copy(update={"grounded": False}))
 
@@ -115,6 +116,13 @@ def test_passed_break_is_ignored() -> None:
     c = cells_by_name(compute_cells(DOC, facts + [passed], VD, EY, "v1"))
     assert c["years_to_break[Unit 4]"].value == c["years_to_expiry[Unit 4]"].value
     assert "already passed" in c["years_to_break[Unit 4]"].formula
+
+
+def test_break_on_valuation_date_counts_as_zero_years() -> None:
+    facts = confirmed_facts()
+    today = human(by_id(facts, "v7go-unit4-break_date"), "2026-11-12", reason="test")
+    c = cells_by_name(compute_cells(DOC, facts + [today], VD, EY, "v1"))
+    assert c["years_to_break[Unit 4]"].value == 0.0
 
 
 def test_no_exit_yield_gives_no_value() -> None:

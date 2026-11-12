@@ -25,6 +25,13 @@ def test_score_fixtures_finds_planted_errors() -> None:
     assert all(r.eval_run_id == "run1" for r in v7 + grok)
 
 
+def test_score_without_extractor_scores_each_one_separately() -> None:
+    rows = score(routed("v7go") + routed("grok"), load_labels(), eval_run_id="r")
+    assert {r.extractor for r in rows} == {"v7go", "grok"}
+    assert len(rows) == len(score(routed("v7go"), load_labels(), "v7go")) + len(
+        score(routed("grok"), load_labels(), "grok"))
+
+
 def test_unlabelled_fields_are_not_scored_and_extra_facts_are_invented() -> None:
     labels = load_labels()
     facts = routed("v7go")

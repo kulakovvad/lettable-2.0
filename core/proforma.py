@@ -37,7 +37,7 @@ def is_eligible(fact: Fact) -> bool:
         return bool((fact.reason or "").strip())
     return (
         fact.review_status == "auto"
-        and bool(fact.quote)
+        and bool((fact.quote or "").strip())
         and fact.page is not None
         and fact.grounded is not False
     )
@@ -171,12 +171,12 @@ def compute_cells(
 
         brk_cell = text_cells.get("break_date")
         brk = _as_date(brk_cell.value) if brk_cell else None
-        if brk_cell is not None and brk is not None and brk > vd and (expiry is None or brk < expiry):
+        if brk_cell is not None and brk is not None and brk >= vd and (expiry is None or brk < expiry):
             to_break[u] = add(f"years_to_break[{u}]",
                               f"(break_date[{u}] - valuation_date) / {DAYS_PER_YEAR} days",
                               _years(brk, vd), "years", cell_ids=[brk_cell.id, vd_cell.id])
         elif u in to_expiry:
-            if brk_cell is not None and brk is not None and brk <= vd:
+            if brk_cell is not None and brk is not None and brk < vd:
                 formula = f"years_to_expiry[{u}] (break {brk.isoformat()} already passed)"
                 inputs = [to_expiry[u].id, brk_cell.id]
             else:
