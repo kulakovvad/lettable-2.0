@@ -1,0 +1,13 @@
+pymupdf
+rapidfuzz
+dateparser
+streamlit
+openai
+psycopg[binary]
+pydantic
+python-dotenv
+mcp
+pandas
+requests
+pytest
+snowflake-connector-python
