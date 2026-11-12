@@ -46,7 +46,8 @@ def _cards(summary: dict[str, Any], extractors: list[str]) -> None:
                     f"{block['sample']['units']} units, {block['sample']['labelled_fields']} labelled fields, "
                     f"{block['sample']['facts']} facts")
         cols = st.columns(6)
-        cols[0].metric("Auto-accepted fields", _pct(block["auto_share"]))
+        cols[0].metric("Auto-accepted fields", _pct(block["auto_share"]),
+                       help=f"n = {block['sample']['facts']} facts")
         cols[1].metric("Precision in auto group", _pct(auto["precision"]), help=f"n = {auto['n']}")
         cols[2].metric("Precision in review group", _pct(review["precision"]), help=f"n = {review['n']}")
         cols[3].metric("Recall overall", _pct(block["overall"]["recall"]),

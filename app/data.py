@@ -20,7 +20,6 @@ from core.models import Cell, Document, EvalRow, Fact, Label, ProformaVersion, n
 ROOT = Path(__file__).resolve().parent.parent
 PDF_DIR = ROOT / "data" / "pdfs"
 MACHINE_EXTRACTORS = ("v7go", "grok", "grok-b")
-EXIT_YIELD_STUB_PCT = "5.6"
 
 warnings: list[str] = []
 
@@ -42,7 +41,8 @@ def backend_status() -> dict[str, str]:
             out[label] = "real"
         except Exception as exc:
             out[label] = f"missing ({type(exc).__name__})"
-    out["exit yield"] = "UI stub assumption"
+    out["exit yield"] = ("EXIT_YIELD_PCT analyst assumption" if os.getenv("EXIT_YIELD_PCT", "").strip()
+                         else "none (gross value n/a)")
     for module, name in (("market", "get_exit_yield"), ("market.rca", "exit_yield"),
                          ("market.fallback", "exit_yield")):
         try:
@@ -63,9 +63,10 @@ def change_story(rows: list[dict[str, Any]]) -> str:
              f"{str(r0.get('created_at', ''))[:19].replace('T', ' ')} UTC, reason: \"{r0.get('reason')}\"."]
     t = r0.get("trigger_fact")
     if t:
-        lines.append(f"Trigger: {t.get('unit_id') or 'property'} {t.get('field')} changed from "
-                     f"{t.get('old')} to {t.get('new')} (fact {t.get('fact_id')}; previous value by "
-                     f"{t.get('old_author') or 'n/a'}).")
+        what = (f"confirmed as {t.get('new')}" if t.get("old") == t.get("new")
+                else f"changed from {t.get('old')} to {t.get('new')}")
+        lines.append(f"Trigger: {t.get('unit_id') or 'property'} {t.get('field')} {what} "
+                     f"(fact {t.get('fact_id')}; previous value by {t.get('old_author') or 'n/a'}).")
     order = {"value": 0, "total_rent": 1, "wault_expiry": 2, "wault_break": 3}
     for r in sorted(rows, key=lambda r: (order.get(r["name"], 9), r["name"])):
         lines.append(f"- {r['name']}: {fmt_value(r['old'], r.get('unit'))} -> "
@@ -156,7 +157,7 @@ def _yield_from_fact(f: Fact) -> dict[str, Any]:
             "author": f.author, "reason": f.reason or f.quote}
 
 
-def _exit_yield(doc_id: str, facts: list[Fact]) -> dict[str, Any]:
+def _exit_yield(doc_id: str, facts: list[Fact]) -> dict[str, Any] | None:
     property_type = next((f.value for f in facts if f.field == "property_type" and f.value), None)
     try:
         from market import get_exit_yield  # type: ignore[attr-defined]
@@ -179,11 +180,11 @@ def _exit_yield(doc_id: str, facts: list[Fact]) -> dict[str, Any]:
                 return _yield_from_fact(f)
         except Exception as exc:
             _warn(f"{module}.exit_yield", exc)
-    return {
-        "value": float(os.getenv("EXIT_YIELD_PCT", EXIT_YIELD_STUB_PCT)),
-        "author": "analyst assumption (UI stub until market/ lands)",
-        "reason": "SEGRO H1 equivalent yield 5.6%, press-release-full-version-final.pdf p. 4",
-    }
+    manual = os.getenv("EXIT_YIELD_PCT", "").strip()
+    if not manual:
+        return None
+    return {"value": float(manual), "author": f"analyst:{default_author()}",
+            "reason": os.getenv("EXIT_YIELD_REASON") or "analyst assumption set via EXIT_YIELD_PCT"}
 
 
 def versions(doc_id: str) -> list[ProformaVersion]:

@@ -29,8 +29,8 @@ def _timeline(doc_id: str, default_fact_id: str | None) -> None:
 def render(doc_id: str) -> None:
     versions = data.versions(doc_id)
     if len(versions) < 2:
-        st.info("Only one proforma version so far. Confirm or correct a field in Review queue to "
-                "create v2, then compare here.")
+        st.info(f"{len(versions)} proforma version(s) so far; a diff needs two. Build v1 in Proforma, "
+                "then confirm or correct a field in Review queue to create v2.")
         _timeline(doc_id, None)
         return
     st.dataframe(frame([{
