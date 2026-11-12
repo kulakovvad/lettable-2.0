@@ -140,6 +140,13 @@ def current_facts(doc_id: str | None = None, extractor: str | None = None) -> li
     return [Fact(**r) for r in rows]
 
 
+def all_facts(doc_id: str | None = None, extractor: str | None = None) -> list[Fact]:
+    """Every fact row including superseded ones; evaluation scores extractor output as written."""
+    where, params = _where({"doc_id": doc_id, "extractor": extractor})
+    rows = _select(f"select * from facts{where} order by doc_id, unit_id, field, created_at", params)
+    return [Fact(**r) for r in rows]
+
+
 def get_fact(fact_id: str) -> Fact | None:
     rows = _select("select * from facts where id = %s", (fact_id,))
     return Fact(**rows[0]) if rows else None

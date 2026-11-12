@@ -33,7 +33,7 @@ Each agent writes only inside its own directories. Touching another agent's file
 
 ## 3. Trust rules (the product depends on these)
 
-- A fact without a verbatim `quote` and a `page` never enters the proforma.
+- A machine-extracted fact without a verbatim `quote` and a `page` never enters the proforma. Human facts (manual edits, review confirmations) enter without a quote but must carry an author and a `reason`.
 - The database is append-only. Never `UPDATE` or `DELETE` facts, cells or labels; a correction is a new row with `supersedes_id`.
 - A manual correction without a `reason` is rejected.
 - Every fact records its author: `model@version` (with `run_id`) for extraction, a person's name for manual edits, `grok-bot:<name>` for MCP edits, `rca@<snapshot_id>` for market data.
