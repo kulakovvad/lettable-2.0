@@ -1,4 +1,8 @@
-"""Apply db/schema.sql and load the Hidings fixtures. Usage: python -m scripts.load_fixtures [--reset]"""
+"""Apply db/schema.sql and load the Hidings fixtures. Usage: python -m scripts.load_fixtures [--reset]
+
+Facts go through verify_doc before they are stored, then both extractors are scored and
+proforma v1 is built, so the UI has the same state the pipeline would produce.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,10 @@ import json
 from pathlib import Path
 
 from core import store
-from core.models import Document, ExtractionRun, Fact, Label
+from core.models import Document, ExtractionRun, Fact, Label, new_id
+from core.proforma import build
+from evalq.score import score_doc
+from verify import verify_doc
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -47,16 +54,27 @@ def main() -> None:
         return
 
     store.insert_document(doc)
+    raw: dict[str, list[Fact]] = {}
     for extractor, model in (("v7go", "v7go"), ("grok", "grok-4")):
-        facts = fixture_facts(extractor)
-        run = ExtractionRun(id=facts[0].run_id, extractor=extractor, model=model,
-                            prompt_version="fixture", doc_ids=[doc.id])
-        store.start_run(run)
-        store.insert_facts(facts)
-        store.finish_run(run.id, tokens=0, cost=0.0)
+        raw[extractor] = fixture_facts(extractor)
+        store.start_run(ExtractionRun(id=raw[extractor][0].run_id, extractor=extractor,
+                                      model=model, prompt_version="fixture", doc_ids=[doc.id]))
+    pages = [p["text"] for p in load_json("pages_hidings.json")["pages"]]
+    routed = verify_doc(raw, pages)
+    store.insert_facts(routed)
+    for facts in raw.values():
+        store.finish_run(facts[0].run_id, tokens=0, cost=0.0)
     store.insert_labels(fixture_labels())
-    print(f"loaded {doc.id}: {len(store.current_facts(doc_id=doc.id))} facts, "
-          f"{len(store.labels(doc_id=doc.id))} labels")
+
+    eval_run_id = new_id()
+    for extractor in raw:
+        store.insert_eval(score_doc(doc.id, extractor, eval_run_id))
+    version = build(doc.id, author="pipeline", reason="initial build")
+
+    review = sum(1 for f in routed if f.review_status == "review")
+    print(f"loaded {doc.id}: {len(routed)} verified facts ({review} in review), "
+          f"{len(store.labels(doc_id=doc.id))} labels, eval run {eval_run_id}, "
+          f"proforma v{version.version_no}")
 
 
 if __name__ == "__main__":

@@ -109,6 +109,19 @@ def start_run(run: ExtractionRun) -> str:
     return run.id
 
 
+def insert_runs(runs: list[ExtractionRun]) -> None:
+    """Idempotent: runs already in the table are left as they are."""
+    with connect() as conn:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "insert into extraction_runs (id, extractor, model, prompt_version, started_at, "
+                "finished_at, tokens, cost, doc_ids) values (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "on conflict (id) do nothing",
+                [(r.id, r.extractor, r.model, r.prompt_version, r.started_at, r.finished_at,
+                  r.tokens, r.cost, r.doc_ids) for r in runs],
+            )
+
+
 def finish_run(run_id: str, tokens: int | None = None, cost: float | None = None,
                finished_at: datetime | None = None) -> None:
     with connect() as conn:
