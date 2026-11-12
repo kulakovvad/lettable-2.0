@@ -85,9 +85,7 @@ Each extracted field is compared with its label:
 
 ### Results
 
-<!-- TODO: paste the output of `python -m evalq.export --md` after the full corpus run. Do not type numbers by hand. -->
-
-TODO: metrics table pending the full corpus run (`python -m evalq.export --md`). Report the sample size (documents, units, labelled fields) next to every number.
+Metrics are not reported for the corpus: this submission's database holds 3 brochures, and the demo document (The Hidings) uses seeded extraction errors to show how the checks react. Run `python -m scripts.run_pipeline --docs 15` and `python -m evalq.export --md` to produce corpus metrics with sample sizes.
 
 ### Caveats
 
